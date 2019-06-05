@@ -61,9 +61,6 @@ public class DefaultOAuth2LoginSession implements OAuth2LoginSession {
     private void savePrincipal(OAuth2Session session, HttpServletRequest httpReq) {
         httpReq.setAttribute(OAUTH2_SESSION, session);
         httpReq.setAttribute(OAUTH2_SECURITY_CONTEXT, convertToSecurityContext(session.getUser()));
-        int maxAge = (int) (session.getExpiresAt() - session.getIssuedAt()) / 1000; //convert from milliseconds to seconds
-        log.debug("session.maxInactiveInterval => {} seconds", maxAge);
-        httpReq.getSession().setMaxInactiveInterval(maxAge);
     }
 
     private SecurityContext convertToSecurityContext(OAuth2Session.User user) {
