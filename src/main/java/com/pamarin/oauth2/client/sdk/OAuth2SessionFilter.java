@@ -35,7 +35,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class OAuth2SessionFilter extends OncePerRequestFilter {
 
-    private static final String RETURN_PATH_COOKIE = "continue_path";
+    private static final String RETURN_PATH = "return_path";
 
     private static final String STATE = "state";
 
@@ -83,7 +83,7 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
                 accessTokenResolver.getTokenName(),
                 refreshTokenResolver.getTokenName()
         );
-        this.returnPathCookieResolver = new DefaultHttpCookieResolver(RETURN_PATH_COOKIE);
+        this.returnPathCookieResolver = new DefaultHttpCookieResolver(RETURN_PATH);
     }
 
     private DefaultOAuth2AccessTokenOperations createOAuth2AccessTokenOperations(
@@ -119,8 +119,12 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
     }
 
     private void saveReturnUrl(HttpServletRequest httpReq, HttpServletResponse httpResp) {
+        String returnPath = httpReq.getParameter(RETURN_PATH);
+        if (!hasText(returnPath)) {
+            returnPath = httpReq.getServletPath();
+        }
         httpResp.addHeader("Set-Cookie",
-                new CookieSpecBuilder(RETURN_PATH_COOKIE, httpReq.getServletPath())
+                new CookieSpecBuilder(RETURN_PATH, returnPath)
                         .setMaxAge(60)
                         .setSecure(hostUrlProvider.provide().startsWith("https://"))
                         .setHttpOnly(true)
@@ -209,7 +213,6 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
         );
 
         if (accessToken != null) {
-            authorizationState.clear(httpReq, httpResp);
             throw new RequireRedirectException("Get accessToken by authorizationCode success.");
         }
     }
