@@ -56,6 +56,10 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
     @Value("${oauth2.session-filter.disabled:#{false}}")
     private Boolean disabled;
 
+    //default is false, if not define
+    @Value("${oauth2.session-filter.authorization-success-url:#{null}}")
+    private String authorizationSuccessUrl;
+
     @Autowired
     public OAuth2SessionFilter(
             HostUrlProvider hostUrlProvider,
@@ -102,6 +106,13 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
         return disabled;
     }
 
+    private String getAuthorizationSuccessUrl() {
+        if (!hasText(authorizationSuccessUrl)) {
+            authorizationSuccessUrl = hostUrlProvider.provide();
+        }
+        return authorizationSuccessUrl;
+    }
+
     private String getAuthorizationUrl(HttpServletRequest httpReq, HttpServletResponse httpResp) {
         String state = authorizationState.create(httpReq, httpResp);
         return format("%s/oauth/authorize?%s",
@@ -128,7 +139,7 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
         } catch (AuthorizationException ex) {
             httpResp.sendRedirect(getAuthorizationUrl(httpReq, httpResp));
         } catch (RequireRedirectException ex) {
-            httpResp.sendRedirect(hostUrlProvider.provide());
+            httpResp.sendRedirect(getAuthorizationSuccessUrl());
         } catch (AuthenticationException ex) {
             httpResp.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized");
         }
@@ -247,13 +258,11 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
 
         @Override
         public void sendError(int sc) throws IOException {
-            log.debug("call uncommit sendError(sc)...");
             super.setStatus(sc);
         }
 
         @Override
         public void sendError(int sc, String msg) throws IOException {
-            log.debug("call uncommit sendError(sc, msg)...");
             super.setStatus(sc);
             super.getOutputStream().print(msg);
         }
