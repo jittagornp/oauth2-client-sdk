@@ -127,12 +127,7 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
             chain.doFilter(httpReq, httpResp);
         } catch (AuthorizationException ex) {
             httpResp.sendRedirect(getAuthorizationUrl(httpReq, httpResp));
-            //httpResp.setStatus(HttpServletResponse.SC_MOVED_TEMPORARILY);
-            //httpResp.setHeader("Location", getAuthorizationUrl(httpReq, httpResp));
-           // httpResp.flushBuffer();
         } catch (RequireRedirectException ex) {
-            //httpResp.setStatus(HttpServletResponse.SC_MOVED_TEMPORARILY);
-            //httpResp.setHeader("Location", hostUrlProvider.provide());
             httpResp.sendRedirect(hostUrlProvider.provide());
         } catch (AuthenticationException ex) {
             httpResp.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized");
@@ -217,7 +212,7 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
                 clearResolverCache(httpReq);
                 loginSession.login(accessToken, httpReq);
             } catch (AuthenticationException e) {
-                chain.doFilter(httpReq, new UncommitHttpServletResponse(httpResp));
+                chain.doFilter(httpReq, new UncommitErrorHttpServletResponse(httpResp));
                 if (httpResp.getStatus() == 401 || httpResp.getStatus() == 403) {
                     throw new AuthorizationException("Please authorize.", e);
                 }
@@ -244,9 +239,9 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
     }
 
     @Slf4j
-    public static class UncommitHttpServletResponse extends HttpServletResponseWrapper {
+    public static class UncommitErrorHttpServletResponse extends HttpServletResponseWrapper {
 
-        public UncommitHttpServletResponse(HttpServletResponse response) {
+        public UncommitErrorHttpServletResponse(HttpServletResponse response) {
             super(response);
         }
 
