@@ -126,13 +126,14 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
             }
             chain.doFilter(httpReq, httpResp);
         } catch (AuthorizationException ex) {
-            //httpResp.sendRedirect(getAuthorizationUrl(httpReq, httpResp));
-            httpResp.setStatus(HttpServletResponse.SC_MOVED_TEMPORARILY);
-            httpResp.setHeader("Location", getAuthorizationUrl(httpReq, httpResp));
-            httpResp.flushBuffer();
+            httpResp.sendRedirect(getAuthorizationUrl(httpReq, httpResp));
+            //httpResp.setStatus(HttpServletResponse.SC_MOVED_TEMPORARILY);
+            //httpResp.setHeader("Location", getAuthorizationUrl(httpReq, httpResp));
+           // httpResp.flushBuffer();
         } catch (RequireRedirectException ex) {
             //httpResp.setStatus(HttpServletResponse.SC_MOVED_TEMPORARILY);
             //httpResp.setHeader("Location", hostUrlProvider.provide());
+            httpResp.sendRedirect(hostUrlProvider.provide());
         } catch (AuthenticationException ex) {
             httpResp.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized");
         }
