@@ -63,6 +63,9 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
     @Value("${oauth2.session-filter.disabled:#{false}}")
     private Boolean disabled;
 
+    @Value("${oauth2.session-filter.authorize-success-url:#{null}}")
+    private String authorizeSuccessUrl;
+
     @Autowired
     public OAuth2SessionFilter(
             HostUrlProvider hostUrlProvider,
@@ -111,20 +114,15 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
     }
 
     private String getContinueUrl(HttpServletRequest httpReq, HttpServletResponse httpResp) {
-        String path = returnPathCookieResolver.resolve(httpReq);
-        if (hasText(path)) {
-            return hostUrlProvider.provide() + path;
-        }
-        return hostUrlProvider.provide();
+        return returnPathCookieResolver.resolve(httpReq);
     }
 
     private void saveContinueUrl(HttpServletRequest httpReq, HttpServletResponse httpResp) {
-        String continueUrl = httpReq.getParameter(CONTINUE_URL);
-        if (!hasText(continueUrl)) {
-            continueUrl = httpReq.getServletPath();
+        if (!hasText(authorizeSuccessUrl)) {
+            authorizeSuccessUrl = "/";
         }
         httpResp.addHeader("Set-Cookie",
-                new CookieSpecBuilder(CONTINUE_URL, continueUrl)
+                new CookieSpecBuilder(CONTINUE_URL, authorizeSuccessUrl)
                         .setMaxAge(60)
                         .setSecure(hostUrlProvider.provide().startsWith("https://"))
                         .setHttpOnly(true)
