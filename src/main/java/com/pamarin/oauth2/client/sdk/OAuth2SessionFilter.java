@@ -35,7 +35,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class OAuth2SessionFilter extends OncePerRequestFilter {
 
-    private static final String RETURN_PATH = "return_path";
+    private static final String CONTINUE_URL = "continue_url";
 
     private static final String STATE = "state";
 
@@ -83,7 +83,7 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
                 accessTokenResolver.getTokenName(),
                 refreshTokenResolver.getTokenName()
         );
-        this.returnPathCookieResolver = new DefaultHttpCookieResolver(RETURN_PATH);
+        this.returnPathCookieResolver = new DefaultHttpCookieResolver(CONTINUE_URL);
     }
 
     private DefaultOAuth2AccessTokenOperations createOAuth2AccessTokenOperations(
@@ -110,7 +110,7 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
         return disabled;
     }
 
-    private String getReturnUrl(HttpServletRequest httpReq, HttpServletResponse httpResp) {
+    private String getContinueUrl(HttpServletRequest httpReq, HttpServletResponse httpResp) {
         String path = returnPathCookieResolver.resolve(httpReq);
         if (hasText(path)) {
             return hostUrlProvider.provide() + path;
@@ -118,13 +118,13 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
         return hostUrlProvider.provide();
     }
 
-    private void saveReturnUrl(HttpServletRequest httpReq, HttpServletResponse httpResp) {
-        String returnPath = httpReq.getParameter(RETURN_PATH);
-        if (!hasText(returnPath)) {
-            returnPath = httpReq.getServletPath();
+    private void saveContinueUrl(HttpServletRequest httpReq, HttpServletResponse httpResp) {
+        String continueUrl = httpReq.getParameter(CONTINUE_URL);
+        if (!hasText(continueUrl)) {
+            continueUrl = httpReq.getServletPath();
         }
         httpResp.addHeader("Set-Cookie",
-                new CookieSpecBuilder(RETURN_PATH, returnPath)
+                new CookieSpecBuilder(CONTINUE_URL, continueUrl)
                         .setMaxAge(60)
                         .setSecure(hostUrlProvider.provide().startsWith("https://"))
                         .setHttpOnly(true)
@@ -156,10 +156,10 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
             }
             chain.doFilter(httpReq, httpResp);
         } catch (AuthorizationException ex) {
-            saveReturnUrl(httpReq, httpResp);
+            saveContinueUrl(httpReq, httpResp);
             httpResp.sendRedirect(getAuthorizationUrl(httpReq, httpResp));
         } catch (RequireRedirectException ex) {
-            httpResp.sendRedirect(getReturnUrl(httpReq, httpResp));
+            httpResp.sendRedirect(getContinueUrl(httpReq, httpResp));
         } catch (AuthenticationException ex) {
             httpResp.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized");
         }
