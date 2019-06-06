@@ -9,6 +9,8 @@ import com.pamarin.commons.provider.HostUrlProvider;
 import com.pamarin.commons.util.QuerystringBuilder;
 import java.io.IOException;
 import static java.lang.String.format;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -131,7 +133,7 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest httpReq, HttpServletResponse httpResp, FilterChain chain) throws ServletException, IOException {
         try {
             if (!ignoreRequest(httpReq)) {
-                filter(httpReq, httpResp);
+                filter(httpReq, httpResp, chain);
             }
             chain.doFilter(httpReq, httpResp);
         } catch (AuthorizationException ex) {
@@ -143,16 +145,16 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
         }
     }
 
-    private void filter(HttpServletRequest httpReq, HttpServletResponse httpResp) {
+    private void filter(HttpServletRequest httpReq, HttpServletResponse httpResp, FilterChain chain) {
         try {
-            sessionFilter(httpReq, httpResp);
+            sessionFilter(httpReq, httpResp, chain);
         } catch (Exception ex) {
             loginSession.logout(httpReq);
             throw ex;
         }
     }
 
-    private void sessionFilter(HttpServletRequest httpReq, HttpServletResponse httpResp) {
+    private void sessionFilter(HttpServletRequest httpReq, HttpServletResponse httpResp, FilterChain chain) {
         String accessToken = accessTokenHeaderResolver.resolve(httpReq);
         if (hasText(accessToken)) {
             loginSession.login(accessToken, httpReq);
@@ -169,7 +171,7 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
             return;
         }
 
-        selfLogin(httpReq, httpResp);
+        selfLogin(httpReq, httpResp, chain);
     }
 
     private boolean isError(HttpServletRequest httpReq) {
@@ -211,7 +213,7 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
                 .build();
     }
 
-    private void selfLogin(HttpServletRequest httpReq, HttpServletResponse httpResp) {
+    private void selfLogin(HttpServletRequest httpReq, HttpServletResponse httpResp, FilterChain chain) {
         try {
             String accessToken = accessTokenResolver.resolve(httpReq);
             loginSession.login(accessToken, httpReq);
@@ -221,7 +223,12 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
                 clearResolverCache(httpReq);
                 loginSession.login(accessToken, httpReq);
             } catch (AuthenticationException e) {
-                throw new AuthorizationException("Please authorize.");
+                try {
+                    chain.doFilter(httpReq, httpResp);
+                } catch (IOException | ServletException err) {
+                    log.debug("filter chain error => ", err);
+                   throw new AuthorizationException("Please authorize.");
+                }
             }
         }
     }
