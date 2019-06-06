@@ -9,8 +9,6 @@ import com.pamarin.commons.provider.HostUrlProvider;
 import com.pamarin.commons.util.QuerystringBuilder;
 import java.io.IOException;
 import static java.lang.String.format;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,8 +20,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
@@ -119,42 +115,36 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
         );
     }
 
-    private boolean ignoreRequest(HttpServletRequest httpReq) {
-        String path = httpReq.getServletPath();
-        log.debug("request path => {}", path);
-        return path.startsWith("/public")
-                || path.startsWith("/assets")
-                || path.startsWith("/static")
-                || path.startsWith("/resources")
-                || path.startsWith("/favicon.ico");
-    }
-
     @Override
     protected void doFilterInternal(HttpServletRequest httpReq, HttpServletResponse httpResp, FilterChain chain) throws ServletException, IOException {
         try {
-            if (!ignoreRequest(httpReq)) {
+            try {
                 filter(httpReq, httpResp, chain);
+            } catch (ReturnStatementException ex) {
+                return;
             }
             chain.doFilter(httpReq, httpResp);
         } catch (AuthorizationException ex) {
-            httpResp.sendRedirect(getAuthorizationUrl(httpReq, httpResp));
+            httpResp.setStatus(HttpServletResponse.SC_MOVED_TEMPORARILY);
+            httpResp.setHeader("Location", getAuthorizationUrl(httpReq, httpResp));
         } catch (RequireRedirectException ex) {
-            httpResp.sendRedirect(hostUrlProvider.provide());
+            httpResp.setStatus(HttpServletResponse.SC_MOVED_TEMPORARILY);
+            httpResp.setHeader("Location", hostUrlProvider.provide());
         } catch (AuthenticationException ex) {
             httpResp.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized");
         }
     }
 
-    private void filter(HttpServletRequest httpReq, HttpServletResponse httpResp, FilterChain chain) {
+    private void filter(HttpServletRequest httpReq, HttpServletResponse httpResp, FilterChain chain) throws IOException, ServletException {
         try {
             sessionFilter(httpReq, httpResp, chain);
-        } catch (Exception ex) {
+        } catch (IOException | ServletException ex) {
             loginSession.logout(httpReq);
             throw ex;
         }
     }
 
-    private void sessionFilter(HttpServletRequest httpReq, HttpServletResponse httpResp, FilterChain chain) {
+    private void sessionFilter(HttpServletRequest httpReq, HttpServletResponse httpResp, FilterChain chain) throws IOException, ServletException {
         String accessToken = accessTokenHeaderResolver.resolve(httpReq);
         if (hasText(accessToken)) {
             loginSession.login(accessToken, httpReq);
@@ -213,7 +203,7 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
                 .build();
     }
 
-    private void selfLogin(HttpServletRequest httpReq, HttpServletResponse httpResp, FilterChain chain) {
+    private void selfLogin(HttpServletRequest httpReq, HttpServletResponse httpResp, FilterChain chain) throws IOException, ServletException {
         try {
             String accessToken = accessTokenResolver.resolve(httpReq);
             loginSession.login(accessToken, httpReq);
@@ -223,18 +213,20 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
                 clearResolverCache(httpReq);
                 loginSession.login(accessToken, httpReq);
             } catch (AuthenticationException e) {
-                try {
-                    chain.doFilter(httpReq, httpResp);
-                } catch (IOException | ServletException err) {
-                    log.debug("filter chain error => ", err);
-                   throw new AuthorizationException("Please authorize.");
+                chain.doFilter(httpReq, httpResp);
+                if (httpResp.getStatus() == 401 || httpResp.getStatus() == 403) {
+                    throw new AuthorizationException("Please authorize.");
                 }
+                throw new ReturnStatementException();
             }
         }
     }
 
     private String refreshToken(HttpServletRequest httpReq, HttpServletResponse httpResp) {
         String refreshToken = refreshTokenResolver.resolve(httpReq);
+        if (!hasText(refreshToken)) {
+            throw new AuthenticationException("Please login.");
+        }
         return accessTokenOperations.getAccessTokenByRefreshToken(
                 refreshToken,
                 httpReq,
