@@ -16,6 +16,7 @@ import org.springframework.stereotype.Component;
 import static org.springframework.util.StringUtils.hasText;
 import javax.servlet.FilterChain;
 import javax.servlet.ServletException;
+import javax.servlet.http.HttpServletResponseWrapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.Ordered;
@@ -125,11 +126,13 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
             }
             chain.doFilter(httpReq, httpResp);
         } catch (AuthorizationException ex) {
+            //httpResp.sendRedirect(getAuthorizationUrl(httpReq, httpResp));
             httpResp.setStatus(HttpServletResponse.SC_MOVED_TEMPORARILY);
             httpResp.setHeader("Location", getAuthorizationUrl(httpReq, httpResp));
+            httpResp.flushBuffer();
         } catch (RequireRedirectException ex) {
-            httpResp.setStatus(HttpServletResponse.SC_MOVED_TEMPORARILY);
-            httpResp.setHeader("Location", hostUrlProvider.provide());
+            //httpResp.setStatus(HttpServletResponse.SC_MOVED_TEMPORARILY);
+            //httpResp.setHeader("Location", hostUrlProvider.provide());
         } catch (AuthenticationException ex) {
             httpResp.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized");
         }
@@ -213,9 +216,9 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
                 clearResolverCache(httpReq);
                 loginSession.login(accessToken, httpReq);
             } catch (AuthenticationException e) {
-                chain.doFilter(httpReq, httpResp);
+                chain.doFilter(httpReq, new UncommitHttpServletResponse(httpResp));
                 if (httpResp.getStatus() == 401 || httpResp.getStatus() == 403) {
-                    throw new AuthorizationException("Please authorize.");
+                    throw new AuthorizationException("Please authorize.", e);
                 }
                 throw new ReturnStatementException();
             }
@@ -237,5 +240,27 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
     private void clearResolverCache(HttpServletRequest httpReq) {
         accessTokenResolver.clearCache(httpReq);
         refreshTokenResolver.clearCache(httpReq);
+    }
+
+    @Slf4j
+    public static class UncommitHttpServletResponse extends HttpServletResponseWrapper {
+
+        public UncommitHttpServletResponse(HttpServletResponse response) {
+            super(response);
+        }
+
+        @Override
+        public void sendError(int sc) throws IOException {
+            log.debug("call uncommit sendError(sc)...");
+            super.setStatus(sc);
+        }
+
+        @Override
+        public void sendError(int sc, String msg) throws IOException {
+            log.debug("call uncommit sendError(sc, msg)...");
+            super.setStatus(sc);
+            super.getOutputStream().print(msg);
+        }
+
     }
 }
