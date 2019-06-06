@@ -69,19 +69,23 @@ public class SignoutController {
     public void signout(HttpServletRequest httpReq, HttpServletResponse httpResp) throws IOException {
         try {
             signoutFromBackendService(httpReq);
+            deleteCookie(httpResp);
             httpResp.sendRedirect(hostUrlProvider.provide());
         } catch (HttpClientErrorException ex) {
             if (ex.getStatusCode() != HttpStatus.UNAUTHORIZED) {
                 throw ex;
             }
 
+            deleteCookie(httpResp);
             httpResp.sendRedirect(getSignoutUrl());
-        } finally {
-            httpResp.addHeader("Set-Cookie", expiredCookie("access_token"));
-            httpResp.addHeader("Set-Cookie", expiredCookie("refresh_token"));
-            httpResp.addHeader("Set-Cookie", expiredCookie("authorize_state"));
-            httpResp.addHeader("Set-Cookie", expiredCookie("continue_url"));
         }
+    }
+
+    private void deleteCookie(HttpServletResponse httpResp) {
+        httpResp.addHeader("Set-Cookie", expiredCookie("access_token"));
+        httpResp.addHeader("Set-Cookie", expiredCookie("refresh_token"));
+        httpResp.addHeader("Set-Cookie", expiredCookie("authorize_state"));
+        httpResp.addHeader("Set-Cookie", expiredCookie("continue_url"));
     }
 
     private String expiredCookie(String cookieName) {
