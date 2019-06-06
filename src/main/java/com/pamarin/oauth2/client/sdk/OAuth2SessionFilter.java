@@ -6,6 +6,9 @@ package com.pamarin.oauth2.client.sdk;
 import com.pamarin.commons.exception.AuthenticationException;
 import com.pamarin.commons.exception.AuthorizationException;
 import com.pamarin.commons.provider.HostUrlProvider;
+import com.pamarin.commons.resolver.DefaultHttpCookieResolver;
+import com.pamarin.commons.resolver.HttpCookieResolver;
+import com.pamarin.commons.util.CookieSpecBuilder;
 import com.pamarin.commons.util.QuerystringBuilder;
 import java.io.IOException;
 import static java.lang.String.format;
@@ -32,6 +35,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class OAuth2SessionFilter extends OncePerRequestFilter {
 
+    private static final String RETURN_PATH_COOKIE = "continue_path";
+
     private static final String STATE = "state";
 
     private static final String CODE = "code";
@@ -52,13 +57,11 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
 
     private final OAuth2AuthorizationState authorizationState;
 
+    private final HttpCookieResolver returnPathCookieResolver;
+
     //default is false, if not define
     @Value("${oauth2.session-filter.disabled:#{false}}")
     private Boolean disabled;
-
-    //default is false, if not define
-    @Value("${oauth2.session-filter.authorization-success-url:#{null}}")
-    private String authorizationSuccessUrl;
 
     @Autowired
     public OAuth2SessionFilter(
@@ -80,6 +83,7 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
                 accessTokenResolver.getTokenName(),
                 refreshTokenResolver.getTokenName()
         );
+        this.returnPathCookieResolver = new DefaultHttpCookieResolver(RETURN_PATH_COOKIE);
     }
 
     private DefaultOAuth2AccessTokenOperations createOAuth2AccessTokenOperations(
@@ -106,11 +110,22 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
         return disabled;
     }
 
-    private String getAuthorizationSuccessUrl() {
-        if (!hasText(authorizationSuccessUrl)) {
-            authorizationSuccessUrl = hostUrlProvider.provide();
+    private String getReturnUrl(HttpServletRequest httpReq, HttpServletResponse httpResp) {
+        String path = returnPathCookieResolver.resolve(httpReq);
+        if (hasText(path)) {
+            return hostUrlProvider.provide() + path;
         }
-        return authorizationSuccessUrl;
+        return hostUrlProvider.provide();
+    }
+
+    private void saveReturnUrl(HttpServletRequest httpReq, HttpServletResponse httpResp) {
+        httpResp.addHeader("Set-Cookie",
+                new CookieSpecBuilder(RETURN_PATH_COOKIE, httpReq.getServletPath())
+                        .setMaxAge(60)
+                        .setSecure(hostUrlProvider.provide().startsWith("https://"))
+                        .setHttpOnly(true)
+                        .build()
+        );
     }
 
     private String getAuthorizationUrl(HttpServletRequest httpReq, HttpServletResponse httpResp) {
@@ -137,9 +152,10 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
             }
             chain.doFilter(httpReq, httpResp);
         } catch (AuthorizationException ex) {
+            saveReturnUrl(httpReq, httpResp);
             httpResp.sendRedirect(getAuthorizationUrl(httpReq, httpResp));
         } catch (RequireRedirectException ex) {
-            httpResp.sendRedirect(getAuthorizationSuccessUrl());
+            httpResp.sendRedirect(getReturnUrl(httpReq, httpResp));
         } catch (AuthenticationException ex) {
             httpResp.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized");
         }
