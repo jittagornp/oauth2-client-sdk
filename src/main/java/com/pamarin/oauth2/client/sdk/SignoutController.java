@@ -4,11 +4,9 @@
 package com.pamarin.oauth2.client.sdk;
 
 import com.pamarin.commons.provider.HostUrlProvider;
-import com.pamarin.commons.util.CookieSpecBuilder;
 import com.pamarin.commons.util.QuerystringBuilder;
 import java.io.IOException;
 import static java.lang.String.format;
-import java.time.LocalDateTime;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -69,31 +67,15 @@ public class SignoutController {
     public void signout(HttpServletRequest httpReq, HttpServletResponse httpResp) throws IOException {
         try {
             signoutFromBackendService(httpReq);
-            deleteCookie(httpResp);
+            CleanSessionCookieUtils.clean(httpResp);
             httpResp.sendRedirect(hostUrlProvider.provide());
         } catch (HttpClientErrorException ex) {
             if (ex.getStatusCode() != HttpStatus.UNAUTHORIZED) {
                 throw ex;
             }
 
-            deleteCookie(httpResp);
+            CleanSessionCookieUtils.clean(httpResp);
             httpResp.sendRedirect(getSignoutUrl());
         }
     }
-
-    private void deleteCookie(HttpServletResponse httpResp) {
-        httpResp.addHeader("Set-Cookie", expiredCookie("access_token"));
-        httpResp.addHeader("Set-Cookie", expiredCookie("refresh_token"));
-        httpResp.addHeader("Set-Cookie", expiredCookie("authorize_state"));
-        httpResp.addHeader("Set-Cookie", expiredCookie("continue_url"));
-    }
-
-    private String expiredCookie(String cookieName) {
-        return new CookieSpecBuilder(cookieName, "")
-                .setExpires(LocalDateTime.now().minusYears(1000))
-                .setHttpOnly(true)
-                .setSecure(hostUrlProvider.provide().startsWith("https://"))
-                .build();
-    }
-
 }

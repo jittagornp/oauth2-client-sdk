@@ -81,7 +81,7 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
         this.accessTokenResolver = accessTokenResolver;
         this.refreshTokenResolver = refreshTokenResolver;
         this.accessTokenHeaderResolver = new RequestHeaderOAuth2TokenResolver();
-        this.loginSession = new DefaultOAuth2LoginSession(clientOperations);
+        this.loginSession = new DefaultOAuth2LoginSession(clientOperations, accessTokenResolver, refreshTokenResolver);
         this.authorizationState = new DefaultOAuth2AuthorizationState(hostUrlProvider);
         this.accessTokenOperations = createOAuth2AccessTokenOperations(
                 hostUrlProvider,

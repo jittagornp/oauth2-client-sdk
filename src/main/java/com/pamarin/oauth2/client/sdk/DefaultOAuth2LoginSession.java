@@ -25,8 +25,18 @@ public class DefaultOAuth2LoginSession implements OAuth2LoginSession {
 
     private final OAuth2ClientOperations clientOperations;
 
-    public DefaultOAuth2LoginSession(OAuth2ClientOperations clientOperations) {
+    private final OAuth2AccessTokenResolver accessTokenResolver;
+
+    private final OAuth2RefreshTokenResolver refreshTokenResolver;
+
+    public DefaultOAuth2LoginSession(
+            OAuth2ClientOperations clientOperations,
+            OAuth2AccessTokenResolver accessTokenResolver,
+            OAuth2RefreshTokenResolver refreshTokenResolver
+    ) {
         this.clientOperations = clientOperations;
+        this.accessTokenResolver = accessTokenResolver;
+        this.refreshTokenResolver = refreshTokenResolver;
     }
 
     @Override
@@ -46,6 +56,7 @@ public class DefaultOAuth2LoginSession implements OAuth2LoginSession {
             return session;
         } catch (HttpClientErrorException ex) {
             if (ex.getStatusCode() == HttpStatus.UNAUTHORIZED) {
+                logout(httpReq);
                 throw new AuthenticationException("Please login.");
             }
             throw ex;
@@ -56,6 +67,8 @@ public class DefaultOAuth2LoginSession implements OAuth2LoginSession {
     public void logout(HttpServletRequest httpReq) {
         httpReq.setAttribute(OAUTH2_SESSION, null);
         httpReq.setAttribute(OAUTH2_SECURITY_CONTEXT, null);
+        accessTokenResolver.clearCache(httpReq);
+        refreshTokenResolver.clearCache(httpReq);
     }
 
     private void savePrincipal(OAuth2Session session, HttpServletRequest httpReq) {
