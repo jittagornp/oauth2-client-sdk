@@ -189,7 +189,7 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
             return;
         }
 
-        selfLogin(httpReq, httpResp, chain);
+        getSession(httpReq, httpResp, chain);
     }
 
     private boolean isError(HttpServletRequest httpReq) {
@@ -230,7 +230,7 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
                 .build();
     }
 
-    private void selfLogin(HttpServletRequest httpReq, HttpServletResponse httpResp, FilterChain chain) throws IOException, ServletException {
+    private void getSession(HttpServletRequest httpReq, HttpServletResponse httpResp, FilterChain chain) throws IOException, ServletException {
         try {
             String accessToken = accessTokenResolver.resolve(httpReq);
             loginSession.login(accessToken, httpReq);
@@ -241,12 +241,17 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
                 loginSession.login(accessToken, httpReq);
             } catch (AuthenticationException e) {
                 chain.doFilter(httpReq, new UncommitErrorHttpServletResponse(httpResp));
-                if (httpResp.getStatus() == 401 || httpResp.getStatus() == 403) {
+                if (unauthorized(httpResp)) {
                     throw new AuthorizationException("Please authorize.", e);
                 }
                 throw new ReturnStatementException();
             }
         }
+    }
+
+    private boolean unauthorized(HttpServletResponse httpResp) {
+        return httpResp.getStatus() == 401
+                || httpResp.getStatus() == 403;
     }
 
     private String refreshToken(HttpServletRequest httpReq, HttpServletResponse httpResp) {

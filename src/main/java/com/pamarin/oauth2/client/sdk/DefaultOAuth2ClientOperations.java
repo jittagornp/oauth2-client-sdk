@@ -8,10 +8,10 @@ import com.pamarin.commons.provider.DefaultHttpServletRequestProvider;
 import com.pamarin.commons.provider.HttpServletRequestProvider;
 import com.pamarin.commons.resolver.DefaultHttpClientIPAddressResolver;
 import com.pamarin.commons.resolver.HttpClientIPAddressResolver;
-import com.pamarin.commons.security.ClientHttpRequestFactoryUtils;
 import com.pamarin.commons.util.Base64Utils;
 import com.pamarin.commons.util.MultiValueMapBuilder;
 import javax.servlet.http.HttpServletRequest;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
@@ -20,11 +20,13 @@ import org.springframework.util.MultiValueMap;
 import static org.springframework.util.StringUtils.hasText;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.cloud.sleuth.Span;
 
 /**
  *
  * @author jitta
  */
+@Slf4j
 public class DefaultOAuth2ClientOperations implements OAuth2ClientOperations {
 
     private final String clientId;
@@ -59,12 +61,21 @@ public class DefaultOAuth2ClientOperations implements OAuth2ClientOperations {
             String ipAddress = httpClientIPAddressResolver.resolve(httpReq);
             builder.add("X-Forwarded-For", ipAddress)
                     .add("REMOTE_ADDR", ipAddress)
+                    .add("x-b3-traceid", getTraceId(httpReq))
                     .add("X-Request-ID", httpReq.getHeader("X-Request-ID"))
                     .add("User-Agent", httpReq.getHeader("User-Agent"))
                     .add("Referer", httpReq.getHeader("Referer"))
                     .add("Host", httpReq.getHeader("Host"));
         }
         return builder;
+    }
+
+    private String getTraceId(HttpServletRequest httpReq) {
+        Span trace = (Span) httpReq.getAttribute("org.springframework.cloud.sleuth.instrument.web.TraceFilter.TRACE");
+        if (trace == null) {
+            return null;
+        }
+        return trace.traceIdString();
     }
 
     private MultiValueMap<String, String> buildAccessTokenHeaders() {
