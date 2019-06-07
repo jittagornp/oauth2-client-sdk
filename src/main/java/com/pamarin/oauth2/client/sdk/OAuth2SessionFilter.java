@@ -258,15 +258,16 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
     }
 
     private String refreshToken(HttpServletRequest httpReq, HttpServletResponse httpResp) {
-        String refreshToken = refreshTokenResolver.resolve(httpReq);
-        if (!hasText(refreshToken)) {
-            throw new AuthenticationException("Please login.");
+        try {
+            String refreshToken = refreshTokenResolver.resolve(httpReq);
+            return accessTokenOperations.getAccessTokenByRefreshToken(
+                    refreshToken,
+                    httpReq,
+                    httpResp
+            ).getAccessToken();
+        } catch (AuthorizationException ex) {
+            throw new AuthenticationException("Please login.", ex);
         }
-        return accessTokenOperations.getAccessTokenByRefreshToken(
-                refreshToken,
-                httpReq,
-                httpResp
-        ).getAccessToken();
     }
 
     private void clearResolverCache(HttpServletRequest httpReq) {
