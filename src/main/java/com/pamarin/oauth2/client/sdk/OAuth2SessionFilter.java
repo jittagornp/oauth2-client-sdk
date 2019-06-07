@@ -158,6 +158,7 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
             chain.doFilter(httpReq, httpResp);
         } catch (AuthorizationException ex) {
             saveContinueUrl(httpReq, httpResp);
+            CleanSessionCookieUtils.clean(httpResp);
             httpResp.sendRedirect(getAuthorizationUrl(httpReq, httpResp));
         } catch (RequireRedirectException ex) {
             httpResp.sendRedirect(getContinueUrl(httpReq, httpResp));
