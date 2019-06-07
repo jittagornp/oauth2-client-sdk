@@ -142,7 +142,7 @@ public class DefaultOAuth2ClientOperations implements OAuth2ClientOperations {
             return getAccessTokenByAuthorizationCode(authorizationCode);
         }
 
-        Span newSpan = this.tracer.createSpan("/oauth/token");
+        Span newSpan = this.tracer.createSpan("code:/oauth/token");
         try {
             newSpan.logEvent(org.springframework.cloud.sleuth.Span.CLIENT_SEND);
             saveRequestAttribute(TRACE, newSpan);
@@ -174,7 +174,7 @@ public class DefaultOAuth2ClientOperations implements OAuth2ClientOperations {
             return getAccessTokenByRefreshToken(refreshToken);
         }
 
-        Span newSpan = this.tracer.createSpan("/oauth/token");
+        Span newSpan = this.tracer.createSpan("refresh:/oauth/token");
         try {
             newSpan.logEvent(org.springframework.cloud.sleuth.Span.CLIENT_SEND);
             saveRequestAttribute(TRACE, newSpan);
