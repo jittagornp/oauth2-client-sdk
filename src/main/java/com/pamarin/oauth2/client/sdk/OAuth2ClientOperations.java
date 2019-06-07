@@ -18,10 +18,16 @@ public interface OAuth2ClientOperations {
     String getScope();
 
     OAuth2AccessToken getAccessTokenByAuthorizationCode(String authorizationCode);
+    
+    OAuth2AccessToken getAccessTokenByAuthorizationCode(String authorizationCode, boolean createNewSpan);
 
     OAuth2AccessToken getAccessTokenByRefreshToken(String refreshToken);
+    
+    OAuth2AccessToken getAccessTokenByRefreshToken(String refreshToken, boolean createNewSpan);
 
     OAuth2Session getSession(String accessToken);
+    
+    OAuth2Session getSession(String accessToken, boolean createNewSpan);
 
     <T> T get(String url, Class<T> responseType, String accessToken);
 

@@ -21,6 +21,7 @@ import static org.springframework.util.StringUtils.hasText;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.cloud.sleuth.Span;
+import org.springframework.cloud.sleuth.Tracer;
 
 /**
  *
@@ -28,6 +29,8 @@ import org.springframework.cloud.sleuth.Span;
  */
 @Slf4j
 public class DefaultOAuth2ClientOperations implements OAuth2ClientOperations {
+
+    private static final String TRACE = "org.springframework.cloud.sleuth.instrument.web.TraceFilter.TRACE";
 
     private final String clientId;
 
@@ -45,14 +48,24 @@ public class DefaultOAuth2ClientOperations implements OAuth2ClientOperations {
 
     private final HttpClientIPAddressResolver httpClientIPAddressResolver;
 
-    public DefaultOAuth2ClientOperations(String clientId, String clientSecret, String authorizationServerHostUrl, String scope) {
+    private final Tracer tracer;
+
+    public DefaultOAuth2ClientOperations(String clientId, String clientSecret, String authorizationServerHostUrl, String scope, Tracer tracer) {
+        this.scope = scope;
+        this.tracer = tracer;
         this.clientId = clientId;
+        this.restTemplate = new RestTemplate();
         this.basicAuthorization = Base64Utils.encode(clientId + ":" + clientSecret);
         this.authorizationServerHostUrl = authorizationServerHostUrl;
-        this.scope = scope;
-        this.restTemplate = new RestTemplate();
         this.httpServletRequestProvider = new DefaultHttpServletRequestProvider();
         this.httpClientIPAddressResolver = new DefaultHttpClientIPAddressResolver();
+    }
+
+    private void saveRequestAttribute(String name, Object value) {
+        HttpServletRequest httpReq = httpServletRequestProvider.provide();
+        if (httpReq != null) {
+            httpReq.setAttribute(name, value);
+        }
     }
 
     private MultiValueMapBuilder addDefaultHeaders(MultiValueMapBuilder<String, String> builder) {
@@ -61,7 +74,7 @@ public class DefaultOAuth2ClientOperations implements OAuth2ClientOperations {
             String ipAddress = httpClientIPAddressResolver.resolve(httpReq);
             builder.add("X-Forwarded-For", ipAddress)
                     .add("REMOTE_ADDR", ipAddress)
-                    .add("x-b3-traceid", getTraceId(httpReq))
+                    .add("X-B3-TraceId", getTraceId(httpReq))
                     .add("X-Request-ID", httpReq.getHeader("X-Request-ID"))
                     .add("User-Agent", httpReq.getHeader("User-Agent"))
                     .add("Referer", httpReq.getHeader("Referer"))
@@ -71,11 +84,11 @@ public class DefaultOAuth2ClientOperations implements OAuth2ClientOperations {
     }
 
     private String getTraceId(HttpServletRequest httpReq) {
-        Span trace = (Span) httpReq.getAttribute("org.springframework.cloud.sleuth.instrument.web.TraceFilter.TRACE");
-        if (trace == null) {
+        Span span = (Span) httpReq.getAttribute(TRACE);
+        if (span == null) {
             return null;
         }
-        return trace.traceIdString();
+        return span.traceIdString();
     }
 
     private MultiValueMap<String, String> buildAccessTokenHeaders() {
@@ -124,6 +137,23 @@ public class DefaultOAuth2ClientOperations implements OAuth2ClientOperations {
     }
 
     @Override
+    public OAuth2AccessToken getAccessTokenByAuthorizationCode(String authorizationCode, boolean createNewSpan) {
+        if (!createNewSpan) {
+            return getAccessTokenByAuthorizationCode(authorizationCode);
+        }
+
+        Span newSpan = this.tracer.createSpan("/oauth/token");
+        try {
+            newSpan.logEvent(org.springframework.cloud.sleuth.Span.CLIENT_SEND);
+            saveRequestAttribute(TRACE, newSpan);
+            return getAccessTokenByAuthorizationCode(authorizationCode);
+        } finally {
+            newSpan.logEvent(org.springframework.cloud.sleuth.Span.CLIENT_RECV);
+            this.tracer.close(newSpan);
+        }
+    }
+
+    @Override
     public OAuth2AccessToken getAccessTokenByRefreshToken(String refreshToken) {
         try {
             return restTemplate.postForEntity(getAuthorizationServerHostUrlForBackend() + "/oauth/token",
@@ -139,6 +169,23 @@ public class DefaultOAuth2ClientOperations implements OAuth2ClientOperations {
     }
 
     @Override
+    public OAuth2AccessToken getAccessTokenByRefreshToken(String refreshToken, boolean createNewSpan) {
+        if (!createNewSpan) {
+            return getAccessTokenByRefreshToken(refreshToken);
+        }
+
+        Span newSpan = this.tracer.createSpan("/oauth/token");
+        try {
+            newSpan.logEvent(org.springframework.cloud.sleuth.Span.CLIENT_SEND);
+            saveRequestAttribute(TRACE, newSpan);
+            return getAccessTokenByRefreshToken(refreshToken);
+        } finally {
+            newSpan.logEvent(org.springframework.cloud.sleuth.Span.CLIENT_RECV);
+            this.tracer.close(newSpan);
+        }
+    }
+
+    @Override
     public OAuth2Session getSession(String accessToken) {
         try {
             return restTemplate.postForEntity(getAuthorizationServerHostUrlForBackend() + "/oauth/session",
@@ -150,6 +197,23 @@ public class DefaultOAuth2ClientOperations implements OAuth2ClientOperations {
                 throw new AuthenticationException("/oauth/session", ex);
             }
             throw ex;
+        }
+    }
+
+    @Override
+    public OAuth2Session getSession(String accessToken, boolean createNewSpan) {
+        if (!createNewSpan) {
+            return getSession(accessToken);
+        }
+
+        Span newSpan = this.tracer.createSpan("/oauth/session");
+        try {
+            newSpan.logEvent(org.springframework.cloud.sleuth.Span.CLIENT_SEND);
+            saveRequestAttribute(TRACE, newSpan);
+            return getSession(accessToken);
+        } finally {
+            newSpan.logEvent(org.springframework.cloud.sleuth.Span.CLIENT_RECV);
+            this.tracer.close(newSpan);
         }
     }
 
