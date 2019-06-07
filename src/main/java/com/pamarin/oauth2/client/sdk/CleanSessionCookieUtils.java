@@ -20,8 +20,6 @@ public class CleanSessionCookieUtils {
     public static void clean(HttpServletResponse httpResp) {
         httpResp.addHeader("Set-Cookie", expiredCookie("access_token"));
         httpResp.addHeader("Set-Cookie", expiredCookie("refresh_token"));
-        httpResp.addHeader("Set-Cookie", expiredCookie("authorize_state"));
-        httpResp.addHeader("Set-Cookie", expiredCookie("continue_url"));
     }
 
     private static String expiredCookie(String cookieName) {
