@@ -41,8 +41,6 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
 
     private static final String CODE = "code";
 
-    private final HostUrlProvider hostUrlProvider;
-
     private final OAuth2ClientOperations clientOperations;
 
     private final OAuth2AccessTokenResolver accessTokenResolver;
@@ -66,6 +64,10 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
     @Value("${oauth2.session-filter.authorize-success-url:#{null}}")
     private String authorizeSuccessUrl;
 
+    private final String hostUrl;
+
+    private final boolean isSecure;
+
     @Autowired
     public OAuth2SessionFilter(
             HostUrlProvider hostUrlProvider,
@@ -73,7 +75,8 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
             OAuth2AccessTokenResolver accessTokenResolver,
             OAuth2RefreshTokenResolver refreshTokenResolver
     ) {
-        this.hostUrlProvider = hostUrlProvider;
+        this.hostUrl = hostUrlProvider.provide();
+        this.isSecure = this.hostUrl.startsWith("https://");
         this.clientOperations = clientOperations;
         this.accessTokenResolver = accessTokenResolver;
         this.refreshTokenResolver = refreshTokenResolver;
@@ -119,12 +122,12 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
 
     private void saveContinueUrl(HttpServletRequest httpReq, HttpServletResponse httpResp) {
         if (!hasText(authorizeSuccessUrl)) {
-            authorizeSuccessUrl = "/";
+            authorizeSuccessUrl = hostUrl;
         }
         httpResp.addHeader("Set-Cookie",
                 new CookieSpecBuilder(CONTINUE_URL, authorizeSuccessUrl)
                         .setMaxAge(60)
-                        .setSecure(hostUrlProvider.provide().startsWith("https://"))
+                        .setSecure(isSecure)
                         .setHttpOnly(true)
                         .build()
         );
@@ -137,7 +140,7 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
                 new QuerystringBuilder()
                         .addParameter("response_type", CODE)
                         .addParameter("client_id", clientOperations.getClientId())
-                        .addParameter("redirect_uri", hostUrlProvider.provide() + "/oauth/callback")
+                        .addParameter("redirect_uri", hostUrl + "/oauth/callback")
                         .addParameter("scope", clientOperations.getScope())
                         .addParameter(STATE, state)
                         .build()
