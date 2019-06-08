@@ -32,7 +32,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
  */
 @Slf4j
 @Component
-@Order(Ordered.HIGHEST_PRECEDENCE)
+@Order(Ordered.HIGHEST_PRECEDENCE + 10)
 public class OAuth2SessionFilter extends OncePerRequestFilter {
 
     private static final String CONTINUE_URL = "continue_url";
