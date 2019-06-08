@@ -83,13 +83,13 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
         this.accessTokenHeaderResolver = new RequestHeaderOAuth2TokenResolver();
         this.loginSession = new DefaultOAuth2LoginSession(clientOperations, accessTokenResolver, refreshTokenResolver);
         this.authorizationState = new DefaultOAuth2AuthorizationState(hostUrlProvider);
+        this.returnPathCookieResolver = new DefaultHttpCookieResolver(CONTINUE_URL);
         this.accessTokenOperations = createOAuth2AccessTokenOperations(
                 hostUrlProvider,
                 clientOperations,
                 accessTokenResolver.getTokenName(),
                 refreshTokenResolver.getTokenName()
         );
-        this.returnPathCookieResolver = new DefaultHttpCookieResolver(CONTINUE_URL);
     }
 
     private DefaultOAuth2AccessTokenOperations createOAuth2AccessTokenOperations(
@@ -120,12 +120,16 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
         return returnPathCookieResolver.resolve(httpReq);
     }
 
-    private void saveContinueUrl(HttpServletRequest httpReq, HttpServletResponse httpResp) {
+    private String getAuthorizeSuccessUrl() {
         if (!hasText(authorizeSuccessUrl)) {
-            authorizeSuccessUrl = hostUrl;
+            return hostUrl;
         }
+        return authorizeSuccessUrl;
+    }
+
+    private void saveContinueUrl(HttpServletRequest httpReq, HttpServletResponse httpResp) {
         httpResp.addHeader("Set-Cookie",
-                new CookieSpecBuilder(CONTINUE_URL, authorizeSuccessUrl)
+                new CookieSpecBuilder(CONTINUE_URL, getAuthorizeSuccessUrl())
                         .setMaxAge(60)
                         .setSecure(isSecure)
                         .setHttpOnly(true)
