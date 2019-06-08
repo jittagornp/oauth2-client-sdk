@@ -91,7 +91,7 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
         this.accessTokenResolver = accessTokenResolver;
         this.refreshTokenResolver = refreshTokenResolver;
         this.accessTokenHeaderResolver = new RequestHeaderOAuth2TokenResolver();
-        this.loginSession = new DefaultOAuth2LoginSession(clientOperations, accessTokenResolver, refreshTokenResolver);
+        this.loginSession = new DefaultOAuth2LoginSession(clientOperations, accessTokenResolver, refreshTokenResolver, rsaKeyPairs);
         this.authorizationState = new DefaultOAuth2AuthorizationState(hostUrlProvider);
         this.returnPathCookieResolver = new DefaultHttpCookieResolver(CONTINUE_URL);
         this.accessTokenOperations = createOAuth2AccessTokenOperations(
@@ -192,24 +192,10 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
 
     private void sessionFilter(HttpServletRequest httpReq, HttpServletResponse httpResp, FilterChain chain) throws IOException, ServletException {
 
-        String tokenSessionId = httpReq.getHeader("X-Session-ID");
-        if (hasText(tokenSessionId)) {
-            try {
-                DecodedJWT verify = JWT.require(Algorithm.RSA256(rsaKeyPairs.getPublicKey(), null))
-                        .build()
-                        .verify(tokenSessionId);
-                log.debug("session.id => {}", verify.getClaim("session.id").asString());
-                log.debug("session.issuedAt => {}", verify.getClaim("session.issuedAt").asString());
-                log.debug("session.expiresAt => {}", verify.getClaim("session.expiresAt").asString());
-                log.debug("session.user.id => {}", verify.getClaim("session.user.id").asString());
-                log.debug("session.user.name => {}", verify.getClaim("session.user.name").asString());
-                log.debug("session.user.authorities => {}", Arrays.asList(verify.getClaim("session.user.authorities").asArray(String.class)));
-                log.debug("session.client.id => {}", verify.getClaim("session.client.id").asString());
-                log.debug("session.client.name => {}", verify.getClaim("session.client.name").asString());
-                log.debug("session.client.scopes => {}", Arrays.asList(verify.getClaim("session.client.scopes").asArray(String.class)));
-            } catch (Exception ex) {
-
-            }
+        String sessionId = httpReq.getHeader("X-Session-ID");
+        if (hasText(sessionId)) {
+            loginSession.login(sessionId, httpReq);
+            return;
         }
 
         String accessToken = accessTokenHeaderResolver.resolve(httpReq);

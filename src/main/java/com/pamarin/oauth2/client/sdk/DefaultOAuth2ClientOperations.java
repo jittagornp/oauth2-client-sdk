@@ -34,6 +34,8 @@ public class DefaultOAuth2ClientOperations implements OAuth2ClientOperations {
 
     private static final String X_SESSION_ID = "X-Session-ID";
 
+    private static final String X_SESSION_ID_ATTR = OAuth2ClientOperations.class.getName() + "." + X_SESSION_ID;
+
     private final String clientId;
 
     private final String basicAuthorization;
@@ -67,7 +69,7 @@ public class DefaultOAuth2ClientOperations implements OAuth2ClientOperations {
             builder.add("X-Forwarded-For", ipAddress)
                     .add("REMOTE_ADDR", ipAddress)
                     .add("X-B3-TraceId", getTraceId(httpReq))
-                    .add(X_SESSION_ID, httpReq.getAttribute(X_SESSION_ID))
+                    .add(X_SESSION_ID, httpReq.getAttribute(X_SESSION_ID_ATTR))
                     .add("X-Request-ID", httpReq.getHeader("X-Request-ID"))
                     .add("User-Agent", httpReq.getHeader("User-Agent"))
                     .add("Referer", httpReq.getHeader("Referer"))
@@ -151,7 +153,7 @@ public class DefaultOAuth2ClientOperations implements OAuth2ClientOperations {
                     new HttpEntity<>(null, buildHeaders(accessToken)),
                     OAuth2Session.class
             );
-            saveTokenSessionId(entity.getHeaders().getFirst(X_SESSION_ID));
+            saveSessionId(entity.getHeaders().getFirst(X_SESSION_ID));
             return entity.getBody();
         } catch (HttpClientErrorException ex) {
             if (ex.getStatusCode() == HttpStatus.UNAUTHORIZED) {
@@ -161,11 +163,11 @@ public class DefaultOAuth2ClientOperations implements OAuth2ClientOperations {
         }
     }
 
-    private void saveTokenSessionId(String tokenSessionId) {
-        if (hasText(tokenSessionId)) {
+    private void saveSessionId(String sessionId) {
+        if (hasText(sessionId)) {
             HttpServletRequest httpReq = httpServletRequestProvider.provide();
             if (httpReq != null) {
-                httpReq.setAttribute(X_SESSION_ID, tokenSessionId);
+                httpReq.setAttribute(X_SESSION_ID_ATTR, sessionId);
             }
         }
     }
