@@ -82,10 +82,13 @@ public class DefaultOAuth2LoginSession implements OAuth2LoginSession {
             DecodedJWT verify = JWT.require(Algorithm.RSA256(rsaKeyPairs.getPublicKey(), null))
                     .build()
                     .verify(accessToken);
+
+            Long issuedAt = verify.getClaim("session.issuedAt").asLong();
+            Long expiresAt = verify.getClaim("session.expiresAt").asLong();
             return OAuth2Session.builder()
                     .id(verify.getClaim("session.id").asString())
-                    .issuedAt(verify.getClaim("session.issuedAt").asLong())
-                    .expiresAt(verify.getClaim("session.expiresAt").asLong())
+                    .issuedAt(issuedAt == null ? 0 : issuedAt)
+                    .expiresAt(expiresAt == null ? 0 : expiresAt)
                     .user(
                             OAuth2Session.User.builder()
                                     .id(verify.getClaim("session.user.id").asString())
