@@ -21,6 +21,7 @@ import static org.springframework.util.StringUtils.hasText;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.cloud.sleuth.Span;
+import org.springframework.http.ResponseEntity;
 
 /**
  *
@@ -30,6 +31,8 @@ import org.springframework.cloud.sleuth.Span;
 public class DefaultOAuth2ClientOperations implements OAuth2ClientOperations {
 
     private static final String TRACE = "org.springframework.cloud.sleuth.instrument.web.TraceFilter.TRACE";
+
+    private static final String X_SESSION_ID = "X-Session-ID";
 
     private final String clientId;
 
@@ -64,6 +67,7 @@ public class DefaultOAuth2ClientOperations implements OAuth2ClientOperations {
             builder.add("X-Forwarded-For", ipAddress)
                     .add("REMOTE_ADDR", ipAddress)
                     .add("X-B3-TraceId", getTraceId(httpReq))
+                    .add(X_SESSION_ID, httpReq.getAttribute(X_SESSION_ID))
                     .add("X-Request-ID", httpReq.getHeader("X-Request-ID"))
                     .add("User-Agent", httpReq.getHeader("User-Agent"))
                     .add("Referer", httpReq.getHeader("Referer"))
@@ -143,15 +147,26 @@ public class DefaultOAuth2ClientOperations implements OAuth2ClientOperations {
     @Override
     public OAuth2Session getSession(String accessToken) {
         try {
-            return restTemplate.postForEntity(getAuthorizationServerHostUrlForBackend() + "/oauth/session",
+            ResponseEntity<OAuth2Session> entity = restTemplate.postForEntity(getAuthorizationServerHostUrlForBackend() + "/oauth/session",
                     new HttpEntity<>(null, buildHeaders(accessToken)),
                     OAuth2Session.class
-            ).getBody();
+            );
+            saveTokenSessionId(entity.getHeaders().getFirst(X_SESSION_ID));
+            return entity.getBody();
         } catch (HttpClientErrorException ex) {
             if (ex.getStatusCode() == HttpStatus.UNAUTHORIZED) {
                 throw new AuthenticationException("/oauth/session", ex);
             }
             throw ex;
+        }
+    }
+
+    private void saveTokenSessionId(String tokenSessionId) {
+        if (hasText(tokenSessionId)) {
+            HttpServletRequest httpReq = httpServletRequestProvider.provide();
+            if (httpReq != null) {
+                httpReq.setAttribute(X_SESSION_ID, tokenSessionId);
+            }
         }
     }
 

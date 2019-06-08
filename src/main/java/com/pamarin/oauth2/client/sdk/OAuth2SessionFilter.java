@@ -3,15 +3,20 @@
  */
 package com.pamarin.oauth2.client.sdk;
 
+import com.auth0.jwt.JWT;
+import com.auth0.jwt.algorithms.Algorithm;
+import com.auth0.jwt.interfaces.DecodedJWT;
 import com.pamarin.commons.exception.AuthenticationException;
 import com.pamarin.commons.exception.AuthorizationException;
 import com.pamarin.commons.provider.HostUrlProvider;
 import com.pamarin.commons.resolver.DefaultHttpCookieResolver;
 import com.pamarin.commons.resolver.HttpCookieResolver;
+import com.pamarin.commons.security.RSAKeyPairs;
 import com.pamarin.commons.util.CookieSpecBuilder;
 import com.pamarin.commons.util.QuerystringBuilder;
 import java.io.IOException;
 import static java.lang.String.format;
+import java.util.Arrays;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,6 +26,7 @@ import javax.servlet.FilterChain;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletResponseWrapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -68,13 +74,17 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
 
     private final boolean isSecure;
 
+    private final RSAKeyPairs rsaKeyPairs;
+
     @Autowired
     public OAuth2SessionFilter(
             HostUrlProvider hostUrlProvider,
             OAuth2ClientOperations clientOperations,
             OAuth2AccessTokenResolver accessTokenResolver,
-            OAuth2RefreshTokenResolver refreshTokenResolver
+            OAuth2RefreshTokenResolver refreshTokenResolver,
+            @Qualifier("sessionTokenKeyPairs") RSAKeyPairs rsaKeyPairs
     ) {
+        this.rsaKeyPairs = rsaKeyPairs;
         this.hostUrl = hostUrlProvider.provide();
         this.isSecure = this.hostUrl.startsWith("https://");
         this.clientOperations = clientOperations;
@@ -181,6 +191,27 @@ public class OAuth2SessionFilter extends OncePerRequestFilter {
     }
 
     private void sessionFilter(HttpServletRequest httpReq, HttpServletResponse httpResp, FilterChain chain) throws IOException, ServletException {
+
+        String tokenSessionId = httpReq.getHeader("X-Session-ID");
+        if (hasText(tokenSessionId)) {
+            try {
+                DecodedJWT verify = JWT.require(Algorithm.RSA256(rsaKeyPairs.getPublicKey(), null))
+                        .build()
+                        .verify(tokenSessionId);
+                log.debug("session.id => {}", verify.getClaim("session.id").asString());
+                log.debug("session.issuedAt => {}", verify.getClaim("session.issuedAt").asString());
+                log.debug("session.expiresAt => {}", verify.getClaim("session.expiresAt").asString());
+                log.debug("session.user.id => {}", verify.getClaim("session.user.id").asString());
+                log.debug("session.user.name => {}", verify.getClaim("session.user.name").asString());
+                log.debug("session.user.authorities => {}", Arrays.asList(verify.getClaim("session.user.authorities").asArray(String.class)));
+                log.debug("session.client.id => {}", verify.getClaim("session.client.id").asString());
+                log.debug("session.client.name => {}", verify.getClaim("session.client.name").asString());
+                log.debug("session.client.scopes => {}", Arrays.asList(verify.getClaim("session.client.scopes").asArray(String.class)));
+            } catch (Exception ex) {
+
+            }
+        }
+
         String accessToken = accessTokenHeaderResolver.resolve(httpReq);
         if (hasText(accessToken)) {
             loginSession.login(accessToken, httpReq);
